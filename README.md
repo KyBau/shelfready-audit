@@ -17,7 +17,7 @@ Category sub-scores are shown on every report. Oct 13 2026 run on 25 Shopify DTC
 The Claude-User test spoofs only the user-agent string. Claude's real requests come from Anthropic IPs, so treat a 403 as "your bot rules key on this UA", not proof that Claude is blocked.
 
 ## Routes
-`/` landing · `/audit?store=` → redirect · `/r/<domain>` report (HTML, OG/Twitter card) · `/api/audit?store=` JSON · `/og.png` · `/healthz`
+`/` landing · `/install?store=` merchant onboarding · `/audit?store=` → redirect · `/r/<domain>` report (HTML, OG/Twitter card) · `/api/audit?store=` JSON · `/og.png` · `/healthz`
 
 ## Safety and politeness
 - Public pages only: about 9 GETs and 1 JSON-RPC `tools/list` POST per audit. 6s per request, ~20s total budget. Identifies itself as `ShelfReadyAudit/1.0`.

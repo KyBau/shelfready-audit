@@ -5,7 +5,7 @@ import os, re, json, time, base64, html, threading, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import auditcore, fixkit
 from og_png import OG_PNG_B64
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
 CONTACT = os.environ.get("CONTACT_EMAIL", "kylebauer@mail.grokbot.com")
 RATE_PER_HOUR = int(os.environ.get("RATE_LIMIT_PER_HOUR", "10"))
@@ -72,8 +72,35 @@ def landing(base, err="", v=""):
     b = f"""<h1>ShelfReady Audit</h1><p class=sub>Can AI agents like Claude, Grok and Muse find, read and buy from your store? About 10 public checks, a score in seconds, and a fix kit.</p>
 <div class=card>{FORM.format(v=E(v))}{f'<p class=err>{E(err)}</p>' if err else ''}</div>
 <div class=card><b>What we check</b><ul class=sub><li>robots.txt rules for ClaudeBot, Claude-User, Claude-SearchBot, GPTBot and more</li><li>Bot walls: does a product page answer a Claude-User request?</li>
-<li>Machine-readable catalog, sitemap, schema.org Product markup with price and stock</li><li>llms.txt, MCP agent tools, /.well-known/ucp</li></ul></div>"""
+<li>Machine-readable catalog, sitemap, schema.org Product markup with price and stock</li><li>llms.txt, MCP agent tools, /.well-known/ucp</li></ul></div><p class=sub>Merchants: <a href=/install>get your own ShelfReady connector →</a></p>"""
     return page("ShelfReady Audit: is your store agent-ready?", "Free agent-readiness score for any store: Claude, Grok and Muse access, bot walls, product markup, MCP. With a fix kit.", b, base + "/", base)
+CONNECTOR_REPO = os.environ.get("CONNECTOR_REPO_URL", "https://github.com/KyBau/shelfready")
+def install_page(base, store=""):
+    d = ""
+    try: d = auditcore.normalize(store) if store else ""
+    except ValueError: d = ""
+    name = d.split(".")[0].replace("-", " ").title() if d else "Your Store"; dom = d or "yourstore.com"
+    b = f"""<p><a href=/>← ShelfReady Audit</a></p><h1>Get your store's ShelfReady connector</h1>
+<p class=sub>One URL that lets Claude, Grok and Muse search {E(name)}'s catalog, check live sizes and stock, and hand shoppers a cart link they check out with on your site. Read-only. No payments, no orders placed by the agent.</p>
+<div class=card><form action=/install method=get><input name=store placeholder="yourstore.com" value="{E(d)}" maxlength=253><button>Preview my setup</button></form></div>
+<h2>How it works</h2><div class=card><ol>
+<li><b>Run the free audit.</b> <a href="/r/{E(dom)}">/r/{E(dom)}</a> shows what blocks agents today, plus a fix kit (CDN rule, product markup, llms.txt).</li>
+<li><b>We set up your connector</b>, locked to <b>{E(dom)}</b> and branded "Official {E(name)} shopping tool". Optionally limited to chosen collections.<br>
+Your connector URL: <code>https://{E(dom.split('.')[0])}.shelfready.app/mcp</code> <span class=sub>(illustrative; issued at setup)</span></li>
+<li><b>Agents shop, you get attribution.</b> Every cart link is tagged <code>?ref=shelfready&amp;utm_source=shelfready&amp;utm_medium=ai_agent</code>, so agent-originated orders show up in Shopify analytics.</li>
+<li><b>We list it</b> in Claude's connector directory, Grok custom connectors and Muse, and add it to your llms.txt.</li></ol></div>
+<h2>Tools your connector exposes</h2><div class=card><ul class=sub>
+<li><b>search_products</b>: query plus price, type and in-stock filters</li><li><b>get_product</b>: variants, sizes, price, compare-at price, stock</li>
+<li><b>build_cart_link</b>: validated cart permalink with attribution; the shopper checks out on your site</li><li><b>get_policies</b>: returns, shipping, privacy, terms</li></ul></div>
+<h2>Self-host instead (free, open source)</h2><div class=card><pre>SHELFREADY_STORE={E(dom)}
+SHELFREADY_STORE_NAME={E(name)}
+SHELFREADY_ALLOW_ANY_STORE=0
+SHELFREADY_COLLECTIONS=          # optional, e.g. mens-shoes,new-arrivals
+SHELFREADY_REF=shelfready
+# Render: New → Blueprint → {E(CONNECTOR_REPO)}  ·  health check /healthz  ·  MCP endpoint POST /mcp</pre></div>
+<div class=cta><b>Want it hosted and listed for you?</b><br>Email <a href="mailto:{E(CONTACT)}?subject={urllib.parse.quote('ShelfReady connector for ' + dom)}">{E(CONTACT)}</a> with your store domain.</div>
+<p class=sub>Requirements: a Shopify store whose /products.json is public (most are). Headless storefronts: see your audit's fix kit first.</p>"""
+    return page(f"ShelfReady connector for {name}", f"Let Claude, Grok and Muse shop {dom}: search, live stock, attributed cart links.", b, f"{base}/install", base)
 def cls(n, mx=100): return "hi" if n >= .85 * mx else ("mid" if n >= .5 * mx else "lo")
 def report(r, base):
     d = r["domain"]; url = f"{base}/r/{d}"
@@ -85,7 +112,7 @@ def report(r, base):
 <h2>Checks</h2><div class=card>{rows}</div>
 <h2>Your fix kit</h2><p class=sub>Generated from the failed checks. Review before applying, and verify field names in your CDN dashboard.</p><pre>{E(r['fix_kit_markdown'])}</pre>
 <div class=cta><b>Want agents to actually shop your store?</b><br>ShelfReady gives Claude, Grok and Muse real tools: product search, live variants and stock, and a cart link the shopper checks out with on your site. We can also apply this fix kit for you.<br><br>
-<a href="mailto:{E(CONTACT)}?subject={urllib.parse.quote('ShelfReady for ' + d)}">Email {E(CONTACT)}</a></div>
+<a href="/install?store={E(d)}">Get your connector →</a> · <a href="mailto:{E(CONTACT)}?subject={urllib.parse.quote('ShelfReady for ' + d)}">Email {E(CONTACT)}</a></div>
 <h2>Audit another store</h2><div class=card>{FORM.format(v='')}</div><p class=sub>Share: <a href="{E(url)}">{E(url)}</a> · JSON: <a href="/api/audit?store={E(d)}">/api/audit?store={E(d)}</a></p>"""
     return page(f"{d} scored {r['score']}/100 on agent-readiness · ShelfReady", f"Top issue: {r['top_issue']}. Free audit + fix kit.", b, url, base)
 class H(BaseHTTPRequestHandler):
@@ -109,6 +136,7 @@ class H(BaseHTTPRequestHandler):
             if u.path == "/og.png": return self.send(200, OG_PNG, "image/png", {"Cache-Control": "public, max-age=86400"})
             if u.path == "/robots.txt": return self.send(200, "User-agent: *\nAllow: /\n", "text/plain")
             if u.path == "/": return self.send(200, landing(base))
+            if u.path == "/install": return self.send(200, install_page(base, store))
             if u.path == "/audit":
                 try: d = auditcore.normalize(store)
                 except ValueError as e: return self.send(400, landing(base, str(e), store))

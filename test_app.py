@@ -53,6 +53,10 @@ class Server(unittest.TestCase):
         st, b, _ = self.get("/"); self.assertEqual(st, 200); self.assertIn('twitter:card content=summary_large_image', b); self.assertIn("viewport", b)
         st, b, h = self.get("/og.png"); self.assertEqual(h["Content-Type"], "image/png")
         self.assertEqual(json.loads(self.get("/healthz")[1])["ok"], True)
+    def test_install(self):
+        st, b, _ = self.get("/install?store=https://www.Ridge.com"); self.assertEqual(st, 200)
+        self.assertIn("SHELFREADY_STORE=ridge.com", b); self.assertIn("Official Ridge shopping tool", b); self.assertIn("utm_medium=ai_agent", b)
+        st, b, _ = self.get("/install?store=<script>"); self.assertEqual(st, 200); self.assertNotIn("<script>", b)
     def test_audit_redirect_and_validation(self):
         st, _, h = self.get("/audit?store=https://www.Ridge.com/x"); self.assertEqual(st, 303); self.assertEqual(h["Location"], "/r/ridge.com")
         self.assertEqual(self.get("/audit?store=127.0.0.1")[0], 400); self.assertEqual(self.get("/api/audit?store=localhost")[0], 400)
