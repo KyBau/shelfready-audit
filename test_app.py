@@ -2,7 +2,7 @@ import os, json, socket, threading, unittest, urllib.request, urllib.error
 from unittest import mock
 import auditcore, app, replies
 LIVE = os.environ.get("SHELFREADY_LIVE") == "1"
-FAKE = {"domain": "example-store.com", "score": 85, "claude_score": 70, "edge": "Cloudflare", "product_page": "https://example-store.com/products/x",
+FAKE = {"domain": "example-store.com", "score": 70, "subscores": {"shop": {"label": "Agent can shop", "score": 20, "max": 35}, "access": {"label": "Claude/AI fetch not blocked", "score": 10, "max": 25}}, "claude_score": 70, "edge": "Cloudflare", "product_page": "https://example-store.com/products/x",
         "checks": [{"id": "claude_fetch", "label": "Readable by Claude's web fetch", "pass": False, "na": False, "evidence": "HTTP 403 with Claude-User UA vs HTTP 200", "points": 0, "max": 0, "claude_points": 0, "claude_max": 30},
                    {"id": "jsonld", "label": "schema.org Product JSON-LD", "pass": True, "na": False, "evidence": "<script>alert(1)</script>", "points": 10, "max": 10, "claude_points": 0, "claude_max": 0}],
         "row": {"domain": "example-store.com", "score": "85", "claude_score": "70", "claude_fetch_status": "403", "claude_fetch_readable": "False", "products_json": "200/3",
@@ -26,11 +26,14 @@ class Validation(unittest.TestCase):
     def test_robots(self):
         r = auditcore.robots_rules("User-agent: ClaudeBot\nDisallow: /\n\nUser-agent: GPTBot\nDisallow: /cart\n")
         self.assertTrue(r["ClaudeBot"]); self.assertFalse(r["GPTBot"])
+    def test_weights(self):
+        self.assertEqual(sum(auditcore.CAT_MAX.values()), 100)
+        self.assertLessEqual(auditcore.WEIGHTS["mcp"][1] + auditcore.WEIGHTS["catalog"][1], 20)  # policy-only MCP + feed caps the shop category at 20/35
     def test_top_issue(self): self.assertEqual(auditcore.top_issue(FAKE["checks"]), "blocks Claude's web fetch")
 class Replies(unittest.TestCase):
     def test_line(self):
         s = replies.line("@ridge", "ridge.com", 100, "blocks Claude's web fetch", "https://x.onrender.com")
-        self.assertEqual(s, "@ridge Ridge scored 100/100 on agent-readiness — blocks Claude's web fetch. Full report: https://x.onrender.com/r/ridge.com")
+        self.assertEqual(s, "@ridge Ridge scored 100/100 on agent-readiness: blocks Claude's web fetch. Full report: https://x.onrender.com/r/ridge.com")
         self.assertLessEqual(len(replies.line("@" + "a" * 15, "a" * 60 + ".com", 5, "x" * 200, "https://" + "b" * 40)), 280)
 class Server(unittest.TestCase):
     @classmethod
@@ -56,8 +59,8 @@ class Server(unittest.TestCase):
     def test_report_cache_escape_and_ratelimit(self):
         with mock.patch("auditcore.audit", return_value=json.loads(json.dumps(FAKE))) as m:
             st, b, _ = self.get("/r/example-store.com"); self.assertEqual(st, 200)
-            self.assertIn("85</b>", b); self.assertIn("70</b>", b); self.assertIn("cf.verified_bot_category", b); self.assertIn("kylebauer@mail.grokbot.com", b)
-            self.assertNotIn("<script>alert", b); self.assertIn("og:title content=\"example-store.com scored 85/100", b)
+            self.assertIn("70</b>", b); self.assertIn("Agent can shop", b); self.assertIn("20/35", b); self.assertIn("cf.verified_bot_category", b); self.assertIn("kylebauer@mail.grokbot.com", b)
+            self.assertNotIn("<script>alert", b); self.assertIn("og:title content=\"example-store.com scored 70/100", b)
             j = json.loads(self.get("/api/audit?store=example-store.com")[1]); self.assertEqual(j["claude_score"], 70); self.assertTrue(j["report_url"].endswith("/r/example-store.com"))
             self.assertEqual(m.call_count, 1)  # cached
             hdr = {"X-Forwarded-For": "203.0.113.9"}

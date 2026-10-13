@@ -57,6 +57,7 @@ button,.btn{padding:14px 20px;border:0;border-radius:10px;background:#238636;col
 .p{background:#238636}.f{background:#da3633}.n{background:#30363d;color:#8b949e}.ev{color:#8b949e;font-size:14px;word-break:break-word}.pts{margin-left:auto;color:#8b949e;font-size:14px;white-space:nowrap}
 pre{background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:14px;overflow:auto;font-size:13px;white-space:pre-wrap;word-break:break-word}
 .cta{background:#1f6feb;border-radius:14px;padding:20px;margin-top:28px}.cta a{color:#fff;font-weight:700}.err{background:#2a1416;border:1px solid #f85149;border-radius:10px;padding:12px}
+.sub2{display:flex;flex-wrap:wrap;justify-content:space-between;margin:8px 0}.bar{flex-basis:100%;height:8px;background:#21262d;border-radius:4px;margin-top:4px}.bar i{display:block;height:8px;border-radius:4px}.bar i.hi{background:#3fb950}.bar i.mid{background:#d29922}.bar i.lo{background:#f85149}
 footer{color:#6e7681;font-size:13px;margin-top:40px}"""
 def page(title, desc, body, url, base):
     return f"""<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
@@ -77,15 +78,16 @@ def cls(n, mx=100): return "hi" if n >= .85 * mx else ("mid" if n >= .5 * mx els
 def report(r, base):
     d = r["domain"]; url = f"{base}/r/{d}"
     rows = "".join(f"""<div class=chk><div class="dot {'n' if c['na'] else ('p' if c['pass'] else 'f')}">{'–' if c['na'] else ('✓' if c['pass'] else '✗')}</div>
-<div><b>{E(c['label'])}</b><div class=ev>{E(c['evidence'])}</div></div><div class=pts>{c['points']}/{c['max']}{f" · Claude {c['claude_points']}/{c['claude_max']}" if c['claude_max'] else ''}</div></div>""" for c in r["checks"])
+<div><b>{E(c['label'])}</b><div class=ev>{E(c['evidence'])}</div></div><div class=pts>{c['points']}/{c['max']}</div></div>""" for c in r["checks"])
     b = f"""<p><a href=/>← ShelfReady Audit</a></p><h1>{E(d)}</h1><p class=sub>Audited {E(r['audited_at'])} · edge: {E(r['edge'])} · took {r['elapsed_s']}s · top issue: <b>{E(r['top_issue'])}</b></p>
-<div class=scores><div class="score {cls(r['score'])}"><b>{r['score']}</b>Agent-readiness /100</div><div class="score {cls(r['claude_score'])}"><b>{r['claude_score']}</b>Claude-readiness /100</div></div>
+<div class=scores><div class="score {cls(r['score'])}"><b>{r['score']}</b>ShelfReady score /100</div></div>
+<div class=card>{"".join(f"<div class=sub2><span>{E(s['label'])}</span><span>{s['score']}/{s['max']}</span><div class=bar><i class={cls(s['score'], s['max'])} style='width:{round(100*s['score']/s['max'])}%'></i></div></div>" for s in r['subscores'].values())}</div>
 <h2>Checks</h2><div class=card>{rows}</div>
 <h2>Your fix kit</h2><p class=sub>Generated from the failed checks. Review before applying, and verify field names in your CDN dashboard.</p><pre>{E(r['fix_kit_markdown'])}</pre>
 <div class=cta><b>Want agents to actually shop your store?</b><br>ShelfReady gives Claude, Grok and Muse real tools: product search, live variants and stock, and a cart link the shopper checks out with on your site. We can also apply this fix kit for you.<br><br>
 <a href="mailto:{E(CONTACT)}?subject={urllib.parse.quote('ShelfReady for ' + d)}">Email {E(CONTACT)}</a></div>
 <h2>Audit another store</h2><div class=card>{FORM.format(v='')}</div><p class=sub>Share: <a href="{E(url)}">{E(url)}</a> · JSON: <a href="/api/audit?store={E(d)}">/api/audit?store={E(d)}</a></p>"""
-    return page(f"{d} scored {r['score']}/100 on agent-readiness · ShelfReady", f"Claude-readiness {r['claude_score']}/100. Top issue: {r['top_issue']}. Free audit + fix kit.", b, url, base)
+    return page(f"{d} scored {r['score']}/100 on agent-readiness · ShelfReady", f"Top issue: {r['top_issue']}. Free audit + fix kit.", b, url, base)
 class H(BaseHTTPRequestHandler):
     server_version = "shelfready-audit/" + VERSION
     def log_message(self, *a): pass

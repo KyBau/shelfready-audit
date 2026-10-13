@@ -36,12 +36,15 @@ def fetch(url, ua=UA, timeout=6, method="GET", data=None, maxbytes=1_500_000):
     req = urllib.request.Request(url, data=data, method=method, headers={"User-Agent": ua, "Accept": "text/html,application/json,*/*", **({"Content-Type": "application/json"} if data else {})})
     try:
         with _opener.open(req, timeout=timeout) as r: return r.status, r.read(maxbytes).decode("utf-8", "replace"), dict(r.headers), r.geturl()
+    except Blocked as e:
+        if getattr(e, "fatal", False): raise
+        return None, f"refused: {e}", {}, url
     except urllib.error.HTTPError as e:
         try: body = e.read(200_000).decode("utf-8", "replace")
         except Exception: body = ""
         return e.code, body, dict(e.headers or {}), url
     except (urllib.error.URLError, TimeoutError, socket.timeout, ConnectionError, OSError) as e:
-        if isinstance(e, Blocked): raise
+        if isinstance(e, Blocked): return None, f"refused: {e}", {}, url
         return None, str(getattr(e, "reason", e))[:120], {}, url
 def robots_rules(txt):
     groups, agents, rules = [], [], []
@@ -77,7 +80,9 @@ def audit(raw, deadline_s=20):
     left = lambda: max(1, deadline_s - (time.time() - t0))
     R = {k: (v.result(timeout=left()) if True else None) for k, v in f.items()}
     checks = []; ev = {}
-    def add(cid, label, ok, evidence, pts, claude=0, na=False): checks.append({"id": cid, "label": label, "pass": ok, "na": na, "evidence": evidence, "points": pts if ok else 0, "max": pts, "claude_points": claude if ok else 0, "claude_max": claude})
+    def add(cid, label, ok, evidence, pts, claude=0, na=False):
+        cat, w = WEIGHTS[cid]
+        checks.append({"id": cid, "label": label, "category": cat, "pass": ok, "na": na, "evidence": evidence, "points": w if ok else 0, "max": w, "claude_points": claude if ok else 0, "claude_max": claude})
     st, txt, _, _ = R["robots"]; rb = robots_rules(txt) if st == 200 else {}
     blocked = [b for b, v in rb.items() if v]; cblocked = [b for b in CLAUDE_BOTS if rb.get(b)]
     add("robots_ai", "robots.txt lets AI agents in", not blocked, f"HTTP {st}; " + (f"Disallow: / for {', '.join(blocked)}" if blocked else f"no Disallow: / for {len(AI_BOTS)} AI user agents"), 20)
@@ -119,20 +124,31 @@ def audit(raw, deadline_s=20):
         ev["claude_fetch_status"] = "n/a"
     ex.shutdown(wait=False, cancel_futures=True)
     score = sum(c["points"] for c in checks); cscore = sum(c["claude_points"] for c in checks)
+    subs = {k: {"label": v, "score": sum(c["points"] for c in checks if c["category"] == k), "max": CAT_MAX[k]} for k, v in CATEGORIES.items()}
     by = {c["id"]: c for c in checks}
     row = {"domain": d, "score": str(score), "claude_score": str(cscore), "claude_fetch_status": ev["claude_fetch_status"], "claude_fetch_readable": str(by["claude_fetch"]["pass"]),
            "products_json": f"{R['pj'][0] if R['pj'][0] else 'ERR'}/{len(prods)}", "jsonld_product": str(by["jsonld"]["pass"]), "llms_txt": str(by["llms"]["pass"]),
            "storefront_mcp_tools": str(len(tools)), "product_page": "n/a" if not prods else "200"}
-    return {"domain": d, "score": score, "claude_score": cscore, "edge": edge, "product_page": pp, "checks": checks, "row": row,
+    return {"domain": d, "score": score, "subscores": subs, "claude_score": cscore, "edge": edge, "product_page": pp, "checks": checks, "row": row,
             "top_issue": top_issue(checks), "audited_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "elapsed_s": round(time.time() - t0, 1)}
-PRIORITY = ["claude_fetch", "no_wall", "robots_claude", "robots_ai", "catalog", "jsonld", "mcp", "llms", "jsonld_offer", "sitemap", "mcp_shopping"]
+# One headline score (0-100). Weights favour "can an agent actually shop here?" over hygiene signals.
+CATEGORIES = {"shop": "Agent can shop", "access": "Claude/AI fetch not blocked", "data": "Structured product data", "robots": "robots.txt", "discovery": "llms.txt, UCP, sitemap"}
+WEIGHTS = {"catalog": ("shop", 15), "mcp": ("shop", 5), "mcp_shopping": ("shop", 15),
+           "no_wall": ("access", 10), "claude_fetch": ("access", 15),
+           "jsonld": ("data", 12), "jsonld_offer": ("data", 8),
+           "robots_ai": ("robots", 5), "robots_claude": ("robots", 5),
+           "llms": ("discovery", 4), "ucp": ("discovery", 3), "sitemap": ("discovery", 3)}
+CAT_MAX = {k: sum(w for c, w in WEIGHTS.values() if c == k) for k in CATEGORIES}
+assert sum(CAT_MAX.values()) == 100
+PRIORITY = ["claude_fetch", "no_wall", "catalog", "robots_claude", "robots_ai", "mcp_shopping", "jsonld", "mcp", "jsonld_offer", "llms", "ucp", "sitemap"]
 SHORT = {"claude_fetch": "blocks Claude's web fetch", "no_wall": "product pages sit behind a bot wall", "robots_claude": "robots.txt blocks Claude",
          "robots_ai": "robots.txt blocks AI agents", "catalog": "no public machine-readable catalog", "jsonld": "no schema.org Product markup",
          "mcp": "no agent (MCP) endpoint", "llms": "no llms.txt", "jsonld_offer": "markup missing price/stock", "sitemap": "no sitemap",
-         "mcp_shopping": "agents can read policies but can't search or cart"}
+         "mcp_shopping": "agent tools answer policy questions only; no search or cart", "ucp": "no UCP manifest"}
 def top_issue(checks):
     by = {c["id"]: c for c in checks}
-    for k in PRIORITY:
+    # Store-specific problems first; the near-universal "policy-only MCP" gap only if nothing else is wrong.
+    for k in [x for x in PRIORITY if x != "mcp_shopping"] + ["mcp_shopping"]:
         c = by.get(k)
         if c and not c["pass"] and not c["na"]: return SHORT[k]
     for k in PRIORITY:

@@ -5,19 +5,15 @@ Enter a domain to get an overall score, a Claude-readiness score, pass/fail chec
 
 Single Python file server, **standard library only** (Python 3.10+). No database, no dependencies.
 
-## Checks
-| Check | Points | Claude pts |
+## Score (one headline number, 0-100)
+| Category | Max | Checks (points) |
 |-|-|-|
-| robots.txt has no `Disallow: /` for 11 AI user agents | 20 | |
-| robots.txt allows ClaudeBot / Claude-User / Claude-SearchBot | | 40 |
-| Public machine-readable catalog (`/products.json`) | 15 | |
-| `sitemap.xml` | 10 | |
-| Product page reachable (no bot wall) | 15 | |
-| schema.org Product JSON-LD / price + availability | 10 / 5 | |
-| `llms.txt` | 10 | |
-| MCP agent endpoint (`/api/mcp` tools/list) | 15 | 30 |
-| Product page readable with a Claude-User UA | | 30 |
-| Info only: MCP exposes shopping tools, `/.well-known/ucp` | 0 | |
+| Agent can shop | 35 | public catalog feed `/products.json` (15) · MCP endpoint (5) · MCP has shopping tools such as search/cart (15). A policy-only MCP caps this at 20 |
+| Claude/AI fetch not blocked | 25 | product page reachable, no bot wall (10) · product page readable with a Claude-User UA (15) |
+| Structured product data | 20 | schema.org Product JSON-LD (12) · price + availability (8) |
+| robots.txt | 10 | no `Disallow: /` for 11 AI agents (5) · ClaudeBot/Claude-User/Claude-SearchBot allowed (5) |
+| Discovery | 10 | llms.txt (4) · `/.well-known/ucp` (3) · sitemap.xml (3) |
+Category sub-scores are shown on every report. Oct 13 2026 run on 25 Shopify DTC brands: median 85, range 10-85. Nobody hits 100 because no store exposed public search/cart agent tools.
 The Claude-User test spoofs only the user-agent string. Claude's real requests come from Anthropic IPs, so treat a 403 as "your bot rules key on this UA", not proof that Claude is blocked.
 
 ## Routes
@@ -43,7 +39,7 @@ Render: New → Blueprint → this repo (`render.yaml`, free plan, health check 
 python3 replies.py --base https://shelfready-audit.onrender.com @Ridge:ridge.com @bombas:bombas.com
 python3 replies.py --base URL --api --file stores.txt    # uses the deployed /api/audit
 ```
-Output: `@Ridge Ridge scored 100/100 (Claude: 70/100) on agent-readiness — blocks Claude's web fetch. Full report: …/r/ridge.com` (always ≤280 chars).
+Output: `@Ridge Ridge scored 70/100 on agent-readiness: blocks Claude's web fetch. Full report: …/r/ridge.com` (always ≤280 chars).
 
 ## ShelfReady
 Want agents to actually shop your store? ShelfReady is an MCP connector with product search, live variants and stock, and cart links the shopper checks out with on your site. We also offer done-for-you fixes. Contact: kylebauer@mail.grokbot.com
