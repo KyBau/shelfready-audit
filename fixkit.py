@@ -86,7 +86,7 @@ def kit(row, edge, what):
     if row.get("storefront_mcp_tools") in ("0", "1", ""):
         fixes.append(("P2 - Give agents real shopping tools (ShelfReady connector)", f"Observed: Shopify storefront MCP tools exposed = {row.get('storefront_mcp_tools') or 0} (policies FAQ only, if any).",
                       f"Run ShelfReady with SHELFREADY_STORE={d} SHELFREADY_ALLOW_ANY_STORE=0 to expose search_products, get_product, build_cart_link and get_policies. Then submit it to Claude's directory (community tier), Grok custom connectors and Muse."))
-    out = [f"# ShelfReady fix kit: {d}", f"Audit run 2026-10-13 (agent_readiness). Overall score {row['score']}/100, Claude-readiness {row.get('claude_score')}/100. Edge: {edge}.", ""]
+    out = [f"# ShelfReady fix kit: {d}", f"Audit run 2026-10-13 (agent_readiness). ShelfReady score {row['score']}/100. Edge: {edge}.", ""]
     for i, (t, why, how) in enumerate(fixes, 1): out += [f"## {i}. {t}", why, "", "```", how, "```", ""]
     out += ["## Verify after shipping", f"```\ncurl -s -o /dev/null -w '%{{http_code}}\\n' -A 'Mozilla/5.0 (compatible; Claude-User/1.0; +Claude-User@anthropic.com)' https://{d}/\ncurl -s 'https://{d}/products.json?limit=1' | head -c 200\npython3 agent_readiness/audit.py <(echo {d})\n```",
             "Note: a UA-only test can't prove Claude's real IPs pass. Check your Cloudflare/Vercel logs for verified ClaudeBot hits too."]

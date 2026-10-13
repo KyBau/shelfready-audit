@@ -8,9 +8,9 @@ import auditcore
 def store_name(d): return d.split(".")[0].replace("-", " ").title()
 def line(handle, d, score, issue, base, claude=None):
     url = f"{base.rstrip('/')}/r/{d}"; who = (handle + " ") if handle else ""
-    sc = f"{score}/100" + (f" (Claude: {claude}/100)" if claude is not None and claude < score else "")
-    s = f"{who}{store_name(d)} scored {sc} on agent-readiness — {issue}. Full report: {url}"
-    if len(s) > 280: s = f"{who}{store_name(d)} scored {score}/100 — {issue}. Full report: {url}"
+    sc = f"{score}/100"
+    s = f"{who}{store_name(d)} scored {sc} on agent-readiness: {issue}. Full report: {url}"
+    if len(s) > 280: s = f"{who}{store_name(d)} scored {score}/100: {issue}. Full report: {url}"
     if len(s) > 280: s = f"{who}{store_name(d)}: {score}/100. {url}"
     return s
 def main(argv=None):
