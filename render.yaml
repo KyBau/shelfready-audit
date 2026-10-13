@@ -1,0 +1,24 @@
+# Render Blueprint: free web service. Not deployed by the author; click "New > Blueprint" to deploy.
+services:
+  - type: web
+    name: shelfready-audit
+    runtime: python
+    plan: free
+    buildCommand: "echo no dependencies"
+    startCommand: "python3 app.py"
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: HOST
+        value: 0.0.0.0
+      - key: PUBLIC_BASE_URL
+        value: https://shelfready-audit.onrender.com   # set to your real URL / custom domain (used in OG tags + share links)
+      - key: CONTACT_EMAIL
+        value: kylebauer@mail.grokbot.com
+      - key: RATE_LIMIT_PER_HOUR
+        value: "10"
+      - key: CACHE_TTL_S
+        value: "86400"
+      - key: TRUST_PROXY
+        value: "1"        # Render sets X-Forwarded-For
